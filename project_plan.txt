@@ -1,0 +1,963 @@
+# Voyager: Travel Planning Platform - Project Plan
+
+## 1. Introduction and Overview
+
+Voyager is an innovative travel planning platform designed to empower users to discover and book unique travel experiences. It aims to provide a visually stunning, intuitive interface, leveraging AI for personalized recommendations, and offering seamless integration with various travel providers.
+
+**Project Goals:**
+*   Provide a user-friendly platform for discovering unique travel experiences.
+*   Offer personalized travel recommendations using AI.
+*   Enable seamless booking through integration with external travel providers.
+*   Deliver a visually appealing and responsive user interface.
+*   Ensure high performance, scalability, and security.
+
+**Key Features:**
+*   User authentication and profile management.
+*   Advanced search and filtering for travel experiences.
+*   AI-powered personalized recommendations.
+*   Detailed experience pages with rich media.
+*   Booking and reservation management.
+*   Integration with third-party travel APIs (flights, accommodations, activities).
+*   User reviews and ratings.
+
+## 2. System Architecture
+
+The system will adopt a microservices-oriented architecture to ensure scalability, maintainability, and independent deployability of services. A single repository (monorepo) will be used initially for ease of development and deployment, containing both frontend and backend services.
+
+**High-Level Architecture:**
+*   **Client Applications:** Web-based frontend (SPA).
+*   **API Gateway:** Routes requests to appropriate backend services, handles authentication/authorization.
+*   **Backend Services (Microservices):**
+    *   User Service
+    *   Discovery/Search Service
+    *   AI Recommendation Service
+    *   Booking Service
+    *   Provider Integration Service
+    *   Content Management Service
+*   **Database:** Polyglot persistence where appropriate (e.g., relational for transactions, NoSQL for content/profiles).
+*   **Caching Layer:** For performance optimization.
+*   **Message Broker:** For inter-service communication and asynchronous tasks.
+*   **File Storage:** For user-uploaded content, rich media.
+
+**Technology Stack (Proposed):**
+*   **Frontend:** React (with Next.js for SSR/SSG), TypeScript, Tailwind CSS.
+*   **Backend:** Node.js (with NestJS framework for structured microservices), TypeScript.
+*   **Database:** PostgreSQL (primary), MongoDB (for content/unstructured data), Redis (caching).
+*   **AI/ML:** Python (with FastAPI for API), TensorFlow/PyTorch, Scikit-learn.
+*   **Message Broker:** Kafka or RabbitMQ.
+*   **API Gateway:** Nginx or API Gateway provided by Cloud Provider.
+*   **Cloud Provider:** AWS (preferred for its comprehensive suite of services).
+*   **CI/CD:** GitHub Actions.
+*   **Monitoring/Logging:** Prometheus/Grafana, ELK Stack (Elasticsearch, Logstash, Kibana) or AWS CloudWatch/X-Ray.
+
+## 3. Core Components Breakdown
+
+### 3.1. User Management & Authentication
+
+**Core Functionality:**
+*   User registration (email/password, social login).
+*   User login, logout, password reset.
+*   User profile management (personal details, preferences, saved experiences).
+*   Role-based access control (e.g., standard user, admin).
+*   Authentication token management (JWT).
+
+**Technical Design & Architecture:**
+*   **Service:** `User Service` (Node.js/NestJS).
+*   **Database:** PostgreSQL (for user credentials, profiles, roles).
+*   **Authentication:** JWT (JSON Web Tokens). Tokens will be issued upon successful login, signed by the User Service, and validated by the API Gateway or individual services.
+*   **Authorization:** Middleware on API Gateway and within services to check user roles/permissions based on JWT claims.
+*   **Password Hashing:** BCrypt for secure password storage.
+*   **Social Login:** OAuth 2.0 integration with providers like Google, Facebook.
+
+**User Experience:**
+*   Clear, multi-step registration process.
+*   Responsive login/signup forms with validation.
+*   Intuitive profile editing interface.
+*   "Forgot password" flow with email verification.
+
+**Data Management:**
+*   **User Table:** `id (PK)`, `email (UNIQUE)`, `password_hash`, `salt`, `first_name`, `last_name`, `phone`, `avatar_url`, `created_at`, `updated_at`, `is_active`.
+*   **User_Preferences Table:** `user_id (FK)`, `preference_key`, `preference_value`.
+*   **Roles Table:** `id (PK)`, `name (UNIQUE)`.
+*   **User_Roles Table:** `user_id (FK)`, `role_id (FK)`.
+
+**Error Handling & Edge Cases:**
+*   Duplicate email registration.
+*   Invalid credentials.
+*   Expired/invalid JWTs.
+*   Rate limiting for login attempts.
+*   Password reset link expiration.
+
+**Security Considerations:**
+*   Hashing passwords with BCrypt.
+*   JWTs signed with strong secrets, short expiration times, and refresh tokens.
+*   Rate limiting on authentication endpoints to prevent brute-force attacks.
+*   Input validation on all user-provided data.
+*   HTTPS enforcement.
+*   Protection against SQL injection and XSS.
+
+**Performance & Scalability:**
+*   User authentication is highly cached (JWT validation is stateless).
+*   Database indexing on `email` and `id` for fast lookups.
+*   Load balancing across multiple instances of the User Service.
+
+**Deployment & Infrastructure:**
+*   User Service deployed as a containerized application (Docker) on AWS ECS/EKS.
+*   PostgreSQL managed service (AWS RDS).
+
+**Test-Driven Development Verification:**
+*   **Immediate Verification:** Use Postman/cURL to manually test `POST /register` and `POST /login` endpoints to verify basic success/failure responses.
+*   **Incremental Testing:**
+    *   **Unit Tests - Simple Cases First:**
+        *   Test `UserService.registerUser(email, password)`: Verify successful user creation, password hashing, and storage.
+        *   Test `UserService.validateCredentials(email, password)`: Verify correct password validation for valid/invalid credentials.
+        *   Test `JwtService.generateToken(payload)`: Verify token generation with correct claims.
+        *   `src/user/user.service.spec.ts`, `src/auth/jwt.service.spec.ts`.
+        *   *Test Pattern:* Use Jest. For `UserService`, mock the database repository methods (e.g., `userRepository.save`, `userRepository.findOne`) using simple jest mocks or fakes that simulate in-memory storage. Avoid complex mocking libraries for simple repository interactions.
+    *   **Integration Tests - Minimal Setup:**
+        *   Test the `AuthModule`'s login endpoint: Send a request to `/auth/login` with valid/invalid credentials and assert the HTTP response (status code, JWT token presence). Use an in-memory database (e.g., `sqlite` for TypeORM, or a Docker test container for PostgreSQL) for database interactions to avoid mocking the entire database.
+        *   *Test Pattern:* Use Supertest for HTTP requests. Use TypeORM's `createConnection` with `synchronize: true` and `dropSchema: true` for a fresh database per test suite, using `sqlite` or a lightweight PostgreSQL test container.
+    *   **End-to-End Tests - Critical Paths Only:**
+        *   User registration -> Login -> Profile update flow. Simulate browser interactions (e.g., using Playwright/Cypress) to ensure the UI and backend integrate correctly for the primary user journey. Focus on the core happy path.
+
+**Testing Strategy:**
+*   **Unit Tests:** Jest. Mock `UserRepository` methods when testing `UserService` logic that interacts with the database. Test pure functions for JWT generation, password hashing separately.
+*   **Integration Tests:** Jest + Supertest. Use a dedicated test database (or in-memory for speed) for the `User` and `Auth` modules. Test the actual API endpoints.
+*   **End-to-End Tests:** Playwright/Cypress. Focus on the core user flow (registration, login, profile view).
+*   **Mocking Strategy:**
+    *   **User Service:** When testing the `UserService` directly, mock the `UserRepository` to simulate database interactions. Example: `jest.mock('typeorm', () => ({ ...jest.requireActual('typeorm'), getRepository: jest.fn(() => ({ save: jest.fn(), findOne: jest.fn() })) }));` or define a simple in-memory `UserRepository` fake.
+    *   **Auth Module (Integration):** Do not mock the database. Use a real, clean test database instance. Mock external OAuth providers (e.g., Google, Facebook) if social login is tested at this level.
+*   **Test Data Management:** Seed the test database with necessary users and roles for integration and E2E tests. Ensure data cleanup (e.g., `beforeEach`/`afterEach` hooks to clear tables or reset the database) after each test suite.
+
+**Monitoring & Logging:**
+*   Application logs for user authentication events (login, logout, registration attempts, failures).
+*   Metrics for successful/failed login attempts, new user registrations.
+*   Error tracking for unexpected issues (e.g., database connection errors).
+
+**Dependencies:**
+*   `bcryptjs`
+*   `jsonwebtoken`
+*   `passport`, `passport-jwt`, `passport-google-oauth20` (for social login)
+*   `@nestjs/jwt`, `@nestjs/passport`, `@nestjs/typeorm`
+*   PostgreSQL client library (e.g., `pg`).
+
+**Potential Risks & Mitigations:**
+*   **Risk:** Brute-force attacks on login. **Mitigation:** Implement aggressive rate limiting and account lockout policies.
+*   **Risk:** Stolen JWTs. **Mitigation:** Use short-lived access tokens with refresh tokens, implement token revocation mechanism.
+*   **Risk:** SQL Injection/XSS. **Mitigation:** Use ORMs, input validation, sanitize all user-generated content.
+
+---
+
+### 3.2. Travel Discovery & Search
+
+**Core Functionality:**
+*   Search for travel experiences by keywords, location, dates, categories, price range, type of experience (e.g., adventure, cultural, relaxation).
+*   Filtering and sorting search results.
+*   Display search results with pagination.
+*   Show detailed information for a selected experience.
+*   Geolocation-based search (e.g., "experiences near me").
+
+**Technical Design & Architecture:**
+*   **Service:** `Discovery Service` (Node.js/NestJS).
+*   **Database:** PostgreSQL for structured data (locations, categories, experience metadata). Potentially MongoDB for rich, unstructured experience descriptions and media links.
+*   **Search Engine:** Elasticsearch or AWS OpenSearch for full-text search, complex filtering, and faceting. Data will be denormalized and indexed from PostgreSQL/MongoDB into Elasticsearch.
+*   **APIs:**
+    *   `GET /experiences?q=keyword&location=...&category=...&page=...`
+    *   `GET /experiences/:id`
+*   **Data Ingestion:** A process (e.g., Kafka Connect, custom script) to sync data from primary databases to Elasticsearch.
+
+**User Experience:**
+*   Prominent search bar with autocomplete suggestions.
+*   Intuitive filter/sort options (checkboxes, sliders, dropdowns).
+*   Visually appealing search results cards with images, title, price, and ratings.
+*   Detailed experience page with description, itinerary, images/videos, reviews, pricing.
+*   Map integration for location-based search.
+
+**Data Management:**
+*   **Experiences Table (PostgreSQL):** `id (PK)`, `title`, `description`, `short_description`, `location_id (FK)`, `category_id (FK)`, `price`, `duration`, `availability_dates`, `provider_id (FK)`, `average_rating`, `review_count`, `created_at`, `updated_at`, `status`.
+*   **Locations Table (PostgreSQL):** `id (PK)`, `name`, `latitude`, `longitude`, `country`, `city`.
+*   **Categories Table (PostgreSQL):** `id (PK)`, `name`.
+*   **Experience Media (MongoDB/File Storage):** `experience_id`, `type (image/video)`, `url`, `alt_text`.
+*   **Elasticsearch Index:** Denormalized `experience` document containing fields for searching and display.
+
+**Error Handling & Edge Cases:**
+*   No results found for a query.
+*   Invalid search parameters.
+*   External search engine (Elasticsearch) unavailability.
+*   Large number of results (pagination errors).
+
+**Security Considerations:**
+*   Input validation for all search parameters to prevent injection attacks.
+*   Ensure only publicly available experiences are returned unless specifically authorized (e.g., for provider-specific management views).
+
+**Performance & Scalability:**
+*   Leverage Elasticsearch for fast, complex queries.
+*   Caching popular search results and experience details using Redis.
+*   Optimize database queries with proper indexing.
+*   Load balancing across multiple Discovery Service instances.
+*   Asynchronous indexing to Elasticsearch.
+
+**Deployment & Infrastructure:**
+*   Discovery Service deployed as containerized application on AWS ECS/EKS.
+*   AWS RDS PostgreSQL.
+*   AWS OpenSearch (managed Elasticsearch service).
+*   AWS S3 for media storage.
+
+**Test-Driven Development Verification:**
+*   **Immediate Verification:** Use Postman/cURL to hit `GET /experiences` with various query parameters (e.g., `?q=safari`, `?location=Paris`) and verify JSON response structure and basic data correctness.
+*   **Incremental Testing:**
+    *   **Unit Tests - Simple Cases First:**
+        *   Test `DiscoveryService.searchExperiences(query)`: Verify it constructs the correct Elasticsearch query. Mock the Elasticsearch client to return predefined results.
+        *   Test `DiscoveryService.getExperienceById(id)`: Verify it fetches from the database/cache correctly. Mock the database repository.
+        *   Test data transformation functions (e.g., `mapDbResultToExperienceDto`).
+        *   *Test Pattern:* Jest. Mock `ElasticsearchService` and `ExperienceRepository`. Use simple mock objects for Elasticsearch client responses.
+    *   **Integration Tests - Minimal Setup:**
+        *   Test the `DiscoveryModule`'s search endpoint (`GET /experiences`). Use a real (test) PostgreSQL database with seeded experience data. Use a local or test Elasticsearch instance (e.g., Docker container running Elasticsearch test instance) to confirm actual search logic and indexing works end-to-end for the service.
+        *   *Test Pattern:* Supertest for HTTP requests. Use Testcontainers for spin-up local Elasticsearch and PostgreSQL instances.
+    *   **End-to-End Tests - Critical Paths Only:**
+        *   Navigate to homepage -> type search query -> view results -> click on an experience -> verify detail page loads correctly. Simulate UI interactions using Playwright/Cypress.
+
+**Testing Strategy:**
+*   **Unit Tests:** Jest. Mock external dependencies like Elasticsearch client, database repositories. Focus on the service logic and data mapping.
+*   **Integration Tests:** Jest + Supertest. For `DiscoveryService`, connect to a test Elasticsearch instance (e.g., using Testcontainers) and a test PostgreSQL database. This verifies the interaction between the service and its primary data stores.
+*   **End-to-End Tests:** Playwright/Cypress. Cover the main search and experience viewing flows from the user's perspective.
+*   **Mocking Strategy:**
+    *   **Unit Testing `DiscoveryService`:** Mock the Elasticsearch client and database repository to control their responses.
+    *   **Integration Testing `DiscoveryModule`:** Avoid mocking Elasticsearch and PostgreSQL. Instead, use lightweight test instances (e.g., Testcontainers) to ensure real integration. Mock only the `ProviderIntegrationService` if it's called during discovery (unlikely for basic search).
+*   **Test Data Management:** Seed the test PostgreSQL database and Elasticsearch with a diverse set of experience data (e.g., 50-100 experiences with varied categories, locations, prices, ratings) to cover various search and filter scenarios. Ensure proper indexing in Elasticsearch before tests run. Clear data after each suite.
+
+**Monitoring & Logging:**
+*   Log search queries for analytics.
+*   Monitor Elasticsearch cluster health, query performance.
+*   Application logs for errors during data indexing or experience retrieval.
+*   Metrics for search query latency, number of results returned.
+
+**Dependencies:**
+*   `@elastic/elasticsearch` client library.
+*   PostgreSQL client library.
+*   Potentially a Redis client for caching.
+
+**Potential Risks & Mitigations:**
+*   **Risk:** Slow search performance with large data sets. **Mitigation:** Thorough Elasticsearch schema design, proper indexing, query optimization, caching.
+*   **Risk:** Data inconsistencies between primary DB and Elasticsearch. **Mitigation:** Implement robust data synchronization (e.g., CDC - Change Data Capture or event-driven updates to Elasticsearch).
+*   **Risk:** Complex search queries leading to high resource usage. **Mitigation:** Implement query limits, enforce pagination, monitor resource usage.
+
+---
+
+### 3.3. AI Recommendation Engine
+
+**Core Functionality:**
+*   Generate personalized travel experience recommendations based on user history, preferences, implicit behavior (e.g., views, likes), and similar user patterns.
+*   Content-based filtering: Recommend experiences similar to those a user has liked.
+*   Collaborative filtering: Recommend experiences based on what similar users have liked.
+*   Hybrid approaches combining both.
+*   Handle cold start problem for new users.
+
+**Technical Design & Architecture:**
+*   **Service:** `AI Recommendation Service` (Python/FastAPI).
+*   **Data Sources:** User interactions (views, bookings, likes from User Service, Discovery Service, Booking Service) stored in a data lake/warehouse (e.g., AWS S3, Redshift) or directly accessed from primary databases. Experience metadata from Discovery Service.
+*   **AI Models:**
+    *   User-Experience Interaction Matrix (for collaborative filtering).
+    *   Experience Feature Vectors (for content-based filtering).
+    *   Hybrid model combining matrix factorization and content embeddings.
+*   **Storage:** Model weights and pre-calculated embeddings stored in S3. Feature store for user and item features (e.g., Redis or a dedicated feature store like Feast).
+*   **API:**
+    *   `GET /recommendations/:userId?count=N`
+    *   `POST /user-feedback` (e.g., user liked experience X)
+*   **Batch Processing:** Periodically retrain models using historical data (e.g., daily/weekly batch jobs via AWS Glue/Lambda).
+*   **Real-time Inference:** FastAPI endpoint to serve recommendations.
+
+**User Experience:**
+*   Dedicated "Recommended for You" section on the homepage or user dashboard.
+*   "Similar experiences you might like" section on experience detail pages.
+*   Recommendations seamlessly integrated into search results or discovery feeds.
+
+**Data Management:**
+*   **User Interaction Logs:** Kafka topic for user events (viewed, liked, booked, searched). Processed by a data pipeline into a data warehouse.
+*   **Features:** User embeddings, experience embeddings.
+*   **Models:** Saved model files (e.g., `.pb` for TensorFlow, `.pt` for PyTorch).
+
+**Error Handling & Edge Cases:**
+*   No recommendations for a new user (cold start).
+*   Recommendation model inference errors.
+*   Service unavailability for recommendations (fall back to popular/trending experiences).
+
+**Security Considerations:**
+*   Access control to recommendation endpoints (only authenticated users).
+*   Ensure user data used for recommendations is pseudonymized or anonymized where possible.
+*   Secure API key management for internal service-to-service communication.
+
+**Performance & Scalability:**
+*   Pre-calculate recommendations for a subset of users or use approximate nearest neighbor (ANN) search for fast retrieval.
+*   Cache recommendations in Redis for a specific duration.
+*   Scale FastAPI service horizontally.
+*   Offline model training.
+
+**Deployment & Infrastructure:**
+*   AI Recommendation Service deployed as a containerized application (Docker) on AWS ECS/EKS.
+*   Potentially AWS Sagemaker for model training and deployment if ML operations become more complex.
+*   AWS S3 for model storage and data lake.
+*   AWS Lambda/Glue for batch processing.
+
+**Test-Driven Development Verification:**
+*   **Immediate Verification:** Use Postman/cURL to test `GET /recommendations/:userId` with a sample user ID and verify a list of experience IDs is returned.
+*   **Incremental Testing:**
+    *   **Unit Tests - Simple Cases First:**
+        *   Test `recommendation_logic.py::get_similar_items(item_id, top_n)`: Verify cosine similarity calculation returns correct order for a small, predefined set of vectors. No external dependencies.
+        *   Test `cold_start_handler.py::get_popular_experiences()`: Verify it returns a predefined list of popular items. Mock the data source.
+        *   Test data preprocessing functions (`preprocess_user_history`, `create_feature_vector`).
+        *   *Test Pattern:* Pytest. Use small, in-memory datasets for testing logic.
+    *   **Integration Tests - Minimal Setup:**
+        *   Test the FastAPI endpoint `GET /recommendations/:userId`. Use a simplified, pre-loaded model (e.g., a small, dummy model file). Mock data sources (e.g., user history database) with local test data. Verify the API response format and basic recommendation logic.
+        *   *Test Pattern:* Pytest + `httpx` (or `pytest-fastapi`). Load a lightweight, pre-trained model for the test.
+    *   **End-to-End Tests - Critical Paths Only:**
+        *   User logs in -> recommendations appear on dashboard. Verify the `Recommendation Service` API is called by the frontend and data is displayed. This would involve a full stack test using Playwright/Cypress.
+
+**Testing Strategy:**
+*   **Unit Tests:** Pytest. Focus on individual functions and components of the AI logic. Mock data sources or use small, in-memory datasets.
+*   **Integration Tests:** Pytest + `httpx`. Test the FastAPI application's endpoints. Use a small, pre-trained dummy model (not the full production model) for inference. Mock data sources (e.g., Kafka consumers, databases) to provide controlled test data.
+*   **End-to-End Tests:** Playwright/Cypress. Verify that the recommendation component on the UI fetches and displays data correctly.
+*   **Mocking Strategy:**
+    *   **Unit Testing AI Logic:** Mock data access layers (e.g., database, S3) and external APIs. Focus on the core algorithm.
+    *   **Integration Testing FastAPI:** Mock the full machine learning model to return predictable outputs, or use a very small, pre-trained "dummy" model that always returns specific results for testing. Mock external data sources (e.g., Kafka streams, large data warehouse queries) using stubs or in-memory fakes.
+*   **Test Data Management:** For unit tests, use small, hardcoded data samples. For integration tests, load a small, representative dataset for the model. For batch training, use a subset of anonymized production data.
+
+**Monitoring & Logging:**
+*   Monitor model inference latency and throughput.
+*   Log recommendation requests and responses.
+*   Monitor data pipeline health for feeding data to the ML models.
+*   Drift detection for model performance.
+
+**Dependencies:**
+*   Python libraries: `fastapi`, `uvicorn`, `scikit-learn`, `numpy`, `pandas`, `tensorflow` or `pytorch`, `boto3` (for S3).
+*   Data pipeline tools (Kafka client, database connectors).
+
+**Potential Risks & Mitigations:**
+*   **Risk:** Cold start problem for new users. **Mitigation:** Fallback to trending/popular experiences, or prompt users for initial preferences.
+*   **Risk:** Recommendations not relevant/accurate. **Mitigation:** A/B testing of different models, continuous monitoring of user engagement, periodic model retraining, incorporate user feedback loops.
+*   **Risk:** High inference latency. **Mitigation:** Optimize model, pre-computation, caching, efficient deployment.
+
+---
+
+### 3.4. Booking & Transaction Management
+
+**Core Functionality:**
+*   Allow users to select dates, number of participants, and other booking options for an experience.
+*   Validate availability (real-time check with Provider Integration Service).
+*   Create a booking reservation.
+*   Secure payment processing integration.
+*   Manage booking status (pending, confirmed, canceled).
+*   Display user's booking history.
+*   Send booking confirmations/updates (email, notifications).
+
+**Technical Design & Architecture:**
+*   **Service:** `Booking Service` (Node.js/NestJS).
+*   **Database:** PostgreSQL (for booking details, payment status, user-booking relationships).
+*   **APIs:**
+    *   `POST /bookings` (create reservation)
+    *   `GET /bookings/:id` (retrieve booking details)
+    *   `GET /users/:userId/bookings` (user booking history)
+    *   `PUT /bookings/:id/cancel`
+*   **Payment Gateway:** Stripe or PayPal for secure payment processing. Voyager will integrate directly via their APIs. PCI DSS compliance is externalized to the payment provider.
+*   **Asynchronous Tasks:** Use a message queue (Kafka/RabbitMQ) for:
+    *   Sending booking confirmation emails.
+    *   Notifying `Provider Integration Service` about new/canceled bookings.
+    *   Updating inventory in `Provider Integration Service`.
+*   **Sagas/Distributed Transactions:** Implement a saga pattern for complex booking flows involving multiple services (e.g., create booking -> call payment -> update provider inventory -> send confirmation). This handles eventual consistency and rollbacks.
+
+**User Experience:**
+*   Clear booking form with real-time availability checks.
+*   Secure payment gateway integration (redirect or embedded iframe).
+*   Booking confirmation page.
+*   User dashboard displaying past and upcoming bookings with status.
+*   Easy cancellation process.
+
+**Data Management:**
+*   **Bookings Table (PostgreSQL):** `id (PK)`, `user_id (FK)`, `experience_id (FK)`, `booking_date`, `start_date`, `end_date`, `num_participants`, `total_price`, `currency`, `status (pending, confirmed, cancelled)`, `payment_transaction_id`, `provider_booking_id`, `created_at`, `updated_at`.
+*   **Payments Table (PostgreSQL):** `id (PK)`, `booking_id (FK)`, `payment_gateway_id`, `amount`, `currency`, `status (paid, failed, refunded)`, `transaction_date`.
+
+**Error Handling & Edge Cases:**
+*   Booking conflicts (already booked dates/slots).
+*   Payment failures.
+*   External provider booking failures.
+*   Network issues during distributed transactions.
+*   Race conditions (two users trying to book the last slot).
+
+**Security Considerations:**
+*   Secure handling of sensitive payment information (tokenization, direct integration with PCI-compliant payment gateway).
+*   Input validation for all booking parameters.
+*   Authorization checks to ensure users can only view/manage their own bookings.
+*   Protection against double-booking (transactional consistency).
+
+**Performance & Scalability:**
+*   Asynchronous processing for non-critical steps (email, provider notifications).
+*   Database indexing on `user_id`, `experience_id`, `booking_date`.
+*   Load balancing across multiple instances of the Booking Service.
+*   Optimistic locking or transactional guarantees for availability checks.
+
+**Deployment & Infrastructure:**
+*   Booking Service deployed as a containerized application on AWS ECS/EKS.
+*   AWS RDS PostgreSQL.
+*   AWS SNS/SQS or Kafka/RabbitMQ for message queuing.
+
+**Test-Driven Development Verification:**
+*   **Immediate Verification:** Use Postman/cURL to `POST /bookings` with sample data and verify a `201 Created` or `400 Bad Request` for invalid input.
+*   **Incremental Testing:**
+    *   **Unit Tests - Simple Cases First:**
+        *   Test `BookingService.calculatePrice(num_participants, experience_id)`: Verify correct price calculation.
+        *   Test `BookingService.validateBookingRequest(booking_dto)`: Verify validation rules (dates, participants).
+        *   Test `BookingService.createBookingRecord(data)`: Verify database insertion with correct status.
+        *   *Test Pattern:* Jest. Mock `BookingRepository` and any price lookup services.
+    *   **Integration Tests - Minimal Setup:**
+        *   Test `BookingModule`'s `POST /bookings` endpoint. Use a real (test) PostgreSQL database. Mock the `ProviderIntegrationService` (to simulate external availability checks) and the `PaymentGatewayService` (to simulate payment success/failure). Verify that a booking record is created in the database and messages are sent to the queue (e.g., capture message in a local Kafka/RabbitMQ test container or an in-memory queue).
+        *   *Test Pattern:* Supertest. Use Testcontainers for PostgreSQL. Use simple stubs or mocks for `ProviderIntegrationService` and `PaymentGatewayService` to simulate their responses (e.g., `isAvailable: true`, `processPayment: { success: true }`).
+    *   **End-to-End Tests - Critical Paths Only:**
+        *   User selects an experience -> proceeds to booking form -> fills details -> makes a dummy payment -> confirms booking. Verify booking appears in user's history. This requires integration with the frontend, provider integration service (could be a test stub for E2E), and payment gateway (test/sandbox mode).
+
+**Testing Strategy:**
+*   **Unit Tests:** Jest. Focus on the internal logic of the `BookingService` (e.g., price calculation, state transitions). Mock out dependencies like the `BookingRepository`, `ProviderIntegrationService` and `PaymentGatewayService`.
+*   **Integration Tests:** Jest + Supertest. Test the `BookingModule`'s API endpoints. Use a real test database (PostgreSQL via Testcontainers). **Crucially, mock external services like `ProviderIntegrationService` and the `PaymentGateway` to control their responses.** For message queues, use an in-memory queue for testing or a lightweight test container.
+*   **End-to-End Tests:** Playwright/Cypress. Focus on the critical booking flow, simulating external services' success/failure where necessary via test environments.
+*   **Mocking Strategy:**
+    *   **Unit Testing `BookingService`:** Mock all external collaborators (repositories, `ProviderIntegrationService`, `PaymentGatewayService`).
+    *   **Integration Testing `BookingModule`:** Mock the `ProviderIntegrationService` and `PaymentGatewayService` to control their responses (e.g., simulate `true` for availability, `success` for payment). Do not mock the database; use a clean test database instance. Mock the message queue by asserting that the correct message *would have been sent* or by using an in-memory message bus.
+*   **Test Data Management:** Seed the test database with experience data. Create dummy user accounts for booking. Ensure proper cleanup of booking records after tests.
+
+**Monitoring & Logging:**
+*   Extensive logging for booking creation, updates, and cancellations.
+*   Log payment transaction status and errors.
+*   Monitor payment gateway integration health and response times.
+*   Metrics for successful bookings, failed payments, cancellation rates.
+
+**Dependencies:**
+*   Stripe/PayPal SDK.
+*   `axios` (for HTTP calls to other internal services or external providers).
+*   `kafka-node` or `amqplib` (for message queue interaction).
+*   PostgreSQL client library.
+
+**Potential Risks & Mitigations:**
+*   **Risk:** Race conditions leading to overbooking. **Mitigation:** Implement transactional locking mechanisms (e.g., pessimistic locking) for availability checks or optimistic locking with retries.
+*   **Risk:** Payment gateway downtime/failures. **Mitigation:** Implement robust error handling, retry mechanisms, and informative user feedback.
+*   **Risk:** Inconsistent state in distributed transactions. **Mitigation:** Implement Saga pattern with compensating transactions, idempotent operations.
+
+---
+
+### 3.5. Content Management (for Unique Experiences)
+
+**Core Functionality:**
+*   Allow administrators/providers to create, read, update, and delete (CRUD) travel experiences.
+*   Rich text editing for descriptions, itineraries.
+*   Media upload (images, videos) and management.
+*   Categorization and tagging of experiences.
+*   Experience moderation/publishing workflow.
+
+**Technical Design & Architecture:**
+*   **Service:** `Content Management Service` (Node.js/NestJS).
+*   **Database:** MongoDB for flexible schema for rich content, PostgreSQL for structured metadata (categories, providers).
+*   **File Storage:** AWS S3 for images and videos.
+*   **APIs:**
+    *   `POST /admin/experiences` (create)
+    *   `GET /admin/experiences/:id` (retrieve)
+    *   `PUT /admin/experiences/:id` (update)
+    *   `DELETE /admin/experiences/:id` (delete)
+    *   `POST /admin/media/upload` (upload media)
+*   **Admin UI:** A dedicated frontend section for content creators/admins (could be part of the main monorepo or a separate lightweight React app).
+*   **Messaging:** Publish events (e.g., "experience_updated", "experience_created") to a message broker for other services (e.g., Discovery Service to re-index Elasticsearch).
+
+**User Experience (Admin/Provider):**
+*   Intuitive admin panel for managing experiences.
+*   WYSIWYG editor for content.
+*   Drag-and-drop media upload.
+*   Clear status indicators (draft, published, pending review).
+
+**Data Management:**
+*   **Experience Content (MongoDB):** `_id (PK)`, `title`, `description (rich text)`, `itinerary (rich text)`, `media_urls ([]), `tags ([]), `language`, `version`.
+*   **Experience Metadata (PostgreSQL):** `experience_id (PK, FK to MongoDB _id)`, `provider_id (FK)`, `status`, `moderation_status`, `published_at`.
+*   **Media Storage (AWS S3):** Objects stored with `experience_id/media_name.ext` path.
+
+**Error Handling & Edge Cases:**
+*   Invalid content formats.
+*   Large file uploads.
+*   Concurrent edits (versioning strategy).
+*   Permissions errors (only authorized users can edit/publish).
+
+**Security Considerations:**
+*   Strict authorization for CRUD operations (only authenticated admins/providers).
+*   Input validation and sanitization for all content fields to prevent XSS.
+*   Secure file uploads (check file types, size limits, scan for malware).
+*   Versioning/auditing of content changes.
+
+**Performance & Scalability:**
+*   Asynchronous media processing (e.g., resizing, watermarking).
+*   MongoDB scales well for document storage.
+*   S3 for highly scalable object storage.
+*   Event-driven updates for re-indexing (Discovery Service).
+
+**Deployment & Infrastructure:**
+*   Content Management Service deployed as containerized application on AWS ECS/EKS.
+*   AWS DocumentDB (managed MongoDB service) or self-managed MongoDB instances.
+*   AWS S3.
+*   AWS Lambda for image processing.
+
+**Test-Driven Development Verification:**
+*   **Immediate Verification:** Use Postman/cURL to `POST /admin/experiences` with a basic JSON payload and verify a `201 Created` response.
+*   **Incremental Testing:**
+    *   **Unit Tests - Simple Cases First:**
+        *   Test `ContentService.createExperience(data)`: Verify data transformation and basic validation. Mock `ExperienceRepository` (for MongoDB).
+        *   Test `MediaService.uploadFile(file)`: Verify S3 upload logic (mock S3 client).
+        *   Test `ContentService.publishExperience(id)`: Verify status update logic.
+        *   *Test Pattern:* Jest. Mock MongoDB repository methods (`save`, `findById`) and S3 client.
+    *   **Integration Tests - Minimal Setup:**
+        *   Test `ContentModule`'s `POST /admin/experiences` endpoint. Use a real (test) MongoDB instance (e.g., via Testcontainers) and a real (test) PostgreSQL instance for metadata. Mock S3 storage if not using a specific S3 test client. Verify the document is created in MongoDB and event is published to a mock message queue.
+        *   *Test Pattern:* Supertest. Use Testcontainers for MongoDB and PostgreSQL. Mock S3 client and the message broker client.
+    *   **End-to-End Tests - Critical Paths Only:**
+        *   Admin logs in -> navigates to content creation -> fills form -> uploads image -> publishes experience. Verify the experience appears on the public site via the Discovery Service.
+
+**Testing Strategy:**
+*   **Unit Tests:** Jest. Focus on service logic, data validation, and interactions with data layers. Mock MongoDB repository methods and S3 client.
+*   **Integration Tests:** Jest + Supertest. Test the API endpoints of `Content Management Service`. Use a real test MongoDB and PostgreSQL instance (Testcontainers). Mock S3 client (e.g., using `aws-sdk-mock` for specific S3 calls or a localstack container if full S3 integration testing is desired) and the message broker.
+*   **End-to-End Tests:** Playwright/Cypress. Test the admin UI and ensure content updates propagate to the public-facing Discovery Service.
+*   **Mocking Strategy:**
+    *   **Unit Testing:** Mock MongoDB and S3 client.
+    *   **Integration Testing:** Use real test databases. Mock S3 client and message broker calls to assert message content without actual publishing.
+*   **Test Data Management:** Seed test MongoDB with various experience content (e.g., with different media types, lengths of descriptions). Clean up data after each test.
+
+**Monitoring & Logging:**
+*   Log all CRUD operations and changes by administrators/providers.
+*   Monitor S3 storage usage and upload performance.
+*   Track content moderation status and workflow progression.
+
+**Dependencies:**
+*   `mongoose` or `@nestjs/mongoose` (for MongoDB).
+*   `aws-sdk` (for S3).
+*   `multer` (for file uploads).
+*   `kafka-node` or `amqplib` (for message queue interaction).
+
+**Potential Risks & Mitigations:**
+*   **Risk:** Data loss during content creation/update. **Mitigation:** Implement frequent auto-save, versioning, and robust backup strategies.
+*   **Risk:** Poor performance for rich text editing. **Mitigation:** Use optimized WYSIWYG editor libraries, client-side rendering.
+*   **Risk:** Large media files impacting performance/cost. **Mitigation:** Implement image/video compression, lazy loading, CDN integration.
+
+---
+
+### 3.6. Integration Services (Travel Providers)
+
+**Core Functionality:**
+*   Act as an intermediary layer between internal services (Discovery, Booking) and external travel provider APIs (e.g., Amadeus, Expedia, custom tour operators).
+*   Translate internal requests/data models to external provider API formats and vice-versa.
+*   Handle real-time availability checks.
+*   Process booking requests and cancellations with providers.
+*   Manage API keys and rate limits for different providers.
+*   Potentially support multiple providers for the same type of experience (e.g., multiple flight providers).
+
+**Technical Design & Architecture:**
+*   **Service:** `Provider Integration Service` (Node.js/NestJS).
+*   **APIs:** Internal APIs exposed for `Discovery Service` (e.g., `GET /providers/:providerId/availability?experienceId=...`) and `Booking Service` (e.g., `POST /providers/:providerId/book`, `POST /providers/:providerId/cancel`).
+*   **External APIs:** Use `axios` or dedicated SDKs for communication with third-party providers.
+*   **Caching:** Cache availability results for a short period to reduce external API calls.
+*   **Retry Mechanisms:** Implement exponential backoff for transient external API failures.
+*   **Rate Limiting:** Implement client-side rate limiting per provider to respect their API limits.
+*   **Circuit Breaker Pattern:** To prevent cascading failures when an external provider is down.
+*   **Data Mapping:** Dedicated mappers/adapters for each external provider's data model.
+
+**User Experience:**
+*   Seamlessly integrated into the booking flow (user doesn't directly interact with this service).
+*   Fast availability checks.
+*   Clear error messages if a booking fails due to provider issues.
+
+**Data Management:**
+*   **Provider Configuration (Database/Config Store):** API keys, endpoints, rate limits for each integrated provider.
+*   No significant persistent data specific to this service beyond configuration and logs.
+
+**Error Handling & Edge Cases:**
+*   External API downtime/errors.
+*   Rate limit exhaustion.
+*   Invalid responses from external APIs.
+*   Experience not found on provider's system.
+*   Partial success/failure in multi-step provider APIs.
+
+**Security Considerations:**
+*   Securely store and manage external API keys (e.g., AWS Secrets Manager).
+*   Encrypt sensitive data in transit to/from providers.
+*   Input validation to prevent malicious data from being sent to external APIs.
+
+**Performance & Scalability:**
+*   Asynchronous, non-blocking I/O for external API calls.
+*   Caching of provider responses.
+*   Horizontal scaling of the service.
+*   Circuit breakers to improve resilience.
+
+**Deployment & Infrastructure:**
+*   Provider Integration Service deployed as a containerized application on AWS ECS/EKS.
+*   AWS Secrets Manager for API keys.
+
+**Test-Driven Development Verification:**
+*   **Immediate Verification:** Not directly applicable as it primarily communicates with external systems. Can use Postman to send requests *to* the Provider Integration Service and observe its response.
+*   **Incremental Testing:**
+    *   **Unit Tests - Simple Cases First:**
+        *   Test `ProviderAdapter.mapToExternalRequest(internal_dto)`: Verify correct data transformation for a specific provider.
+        *   Test `ProviderAdapter.mapFromExternalResponse(external_json)`: Verify correct data transformation from external response.
+        *   Test `RateLimiter.acquireToken(provider_id)`: Verify rate limit logic.
+        *   *Test Pattern:* Jest. Test pure mapping functions. Mock `axios` or other HTTP clients to return predefined external API responses.
+    *   **Integration Tests - Minimal Setup:**
+        *   Test `ProviderIntegrationService`'s internal `POST /providers/:providerId/book` endpoint. **Mock the external HTTP calls to the actual travel provider APIs.** This is critical as we don't want to hit real external APIs during tests. Use a dedicated mock server (e.g., `nock` for Node.js, or a standalone mock HTTP server like WireMock) to simulate external provider responses, including success, failure, and rate limits. Verify that the service correctly processes internal requests, calls the mock external API, and returns the expected internal response.
+        *   *Test Pattern:* Supertest. Use `nock` or a similar HTTP mocking library to intercept and mock outgoing HTTP requests to external provider APIs.
+    *   **End-to-End Tests - Critical Paths Only:**
+        *   Booking flow from UI to internal Booking Service to Provider Integration Service to mocked external provider and back. This would be part of the `Booking` E2E tests, where the `ProviderIntegrationService` is set up to interact with a *controlled mock or test environment* of the external provider.
+
+**Testing Strategy:**
+*   **Unit Tests:** Jest. Focus on data mapping functions, rate limit logic, retry logic. Heavily mock HTTP clients and any external SDKs.
+*   **Integration Tests:** Jest + Supertest + `nock` (or `MSW` - Mock Service Worker). Test the `Provider Integration Service`'s API endpoints. The key here is to **mock all external HTTP requests** to the actual travel providers. This allows testing the service's logic without incurring costs, hitting rate limits, or relying on external systems.
+*   **End-to-End Tests:** Playwright/Cypress. For E2E, the `Provider Integration Service` should ideally interact with a **sandbox or test environment** provided by the actual travel providers, or a dedicated, stable mock server that simulates real provider behavior.
+*   **Mocking Strategy:**
+    *   **Unit Testing:** Mock all HTTP calls and external SDKs.
+    *   **Integration Testing:** **Critical to mock *all* outgoing HTTP requests to external travel provider APIs.** This is the primary use case for advanced mocking (e.g., `nock`) to simulate various external API scenarios (success, failure, delays, specific data).
+*   **Test Data Management:** Define expected request and response payloads for each external provider's API.
+
+**Monitoring & Logging:**
+*   Log all requests and responses to/from external providers for auditing and debugging.
+*   Monitor external API response times and error rates.
+*   Metrics for rate limit utilization.
+*   Circuit breaker state changes.
+
+**Dependencies:**
+*   `axios` (HTTP client).
+*   Specific provider SDKs (e.g., Amadeus SDK).
+*   `circuit-breaker-js` or similar library.
+
+**Potential Risks & Mitigations:**
+*   **Risk:** External provider API changes breaking integration. **Mitigation:** Automated integration tests with mock servers, robust API versioning strategy, proactive monitoring of provider API docs.
+*   **Risk:** Rate limit exhaustion leading to service interruption. **Mitigation:** Implement strict rate limiting, exponential backoff, and potentially dynamic rate adjustment.
+*   **Risk:** Cost implications of high external API usage. **Mitigation:** Aggressive caching, optimized data retrieval, negotiate favorable API terms.
+
+---
+
+### 3.7. User Interface (Frontend)
+
+**Core Functionality:**
+*   Responsive web application for desktop and mobile.
+*   Intuitive navigation and search experience.
+*   Visually appealing presentation of travel experiences with high-quality imagery/video.
+*   Interactive booking forms and payment integration.
+*   User profile and booking history dashboards.
+*   Personalized recommendations display.
+*   Authentication flows (login, signup, password reset).
+
+**Technical Design & Architecture:**
+*   **Framework:** React with Next.js (for SSR/SSG, routing, API routes for backend-for-frontend if needed).
+*   **Language:** TypeScript.
+*   **Styling:** Tailwind CSS for utility-first styling and rapid UI development. DaisyUI for component library built on Tailwind.
+*   **State Management:** React Context API or Zustand/Jotai for simpler global state; avoid Redux unless strict requirements emerge.
+*   **Data Fetching:** React Query/SWR for caching, de-duplication, and automatic re-fetching of data.
+*   **API Communication:** `axios` or native `fetch` for communicating with the API Gateway.
+*   **Build/Bundling:** Next.js handles this (Webpack/Babel under the hood).
+
+**User Experience:**
+*   **Visuals:** High-resolution images/videos, smooth transitions, modern design.
+*   **Accessibility:** WCAG 2.1 AA compliance (semantic HTML, ARIA attributes, keyboard navigation).
+*   **Performance:** Fast loading times (SSR/SSG, image optimization, code splitting).
+*   **Responsiveness:** Adaptable layout for various screen sizes.
+*   **User Flow:** Clear, guided paths for searching, viewing, and booking.
+*   **Feedback:** Loading indicators, success/error messages, form validation.
+
+**Data Management:**
+*   Client-side caching with React Query/SWR.
+*   User session management (JWT storage in HttpOnly cookies to prevent XSS).
+*   Local storage for non-sensitive preferences (e.g., UI theme).
+
+**Error Handling & Edge Cases:**
+*   Display user-friendly error messages for API failures.
+*   Handle network disconnections gracefully (e.g., "offline" indicators).
+*   Form validation errors.
+*   Loading states for data fetching.
+
+**Security Considerations:**
+*   **XSS Protection:** Sanitize all user-generated content before rendering. React's JSX helps, but explicit sanitization for `dangerouslySetInnerHTML` is crucial.
+*   **CSRF Protection:** Use CSRF tokens if using cookie-based authentication, or rely on JWT in `Authorization` header with secure cookie settings.
+*   **Content Security Policy (CSP):** Mitigate XSS and data injection attacks.
+*   **Dependencies:** Regularly update npm packages to address security vulnerabilities.
+*   **Secure API Calls:** Always use HTTPS.
+
+**Performance & Scalability:**
+*   Server-Side Rendering (SSR) with Next.js for initial page load performance and SEO.
+*   Image optimization (Next.js Image component).
+*   Lazy loading components and images.
+*   Code splitting.
+*   CDN for static assets.
+
+**Deployment & Infrastructure:**
+*   Frontend built as static assets or deployed as a Node.js server (for SSR) on AWS Amplify (for easy deployment of Next.js apps) or AWS ECS/EKS.
+*   AWS CloudFront CDN for static assets.
+
+**Test-Driven Development Verification:**
+*   **Immediate Verification:** Manually navigate to a new page/component in the browser during development to visually confirm rendering.
+*   **Incremental Testing:**
+    *   **Unit Tests - Simple Cases First:**
+        *   Test pure components (e.g., `Button`, `Card`) for rendering with props using React Testing Library.
+        *   Test utility functions (e.g., `formatDate`, `calculateDiscount`).
+        *   Test custom hooks (e.g., `useAuth`).
+        *   *Test Pattern:* Jest + React Testing Library. Focus on component rendering and event handling. Avoid snapshot testing initially unless confident in component stability.
+    *   **Integration Tests - Minimal Setup:**
+        *   Test a small feature (e.g., login form submission). Render the `LoginForm` component, simulate user input and button click, and assert that the API call is made with correct payload and that success/error messages are displayed. Mock the API calls using `MSW` (Mock Service Worker) for network interception.
+        *   *Test Pattern:* Jest + React Testing Library + `MSW`. `MSW` is ideal as it mocks at the network level, making tests more realistic without requiring a full backend.
+    *   **End-to-End Tests - Critical Paths Only:**
+        *   User navigates to search page -> enters query -> clicks search -> views results -> clicks on an experience -> views details. Use Playwright/Cypress to simulate browser interactions. These tests interact with the fully deployed backend/frontend.
+
+**Testing Strategy:**
+*   **Unit Tests:** Jest + React Testing Library. Test individual React components and custom hooks. Focus on accessibility and user-driven interactions.
+*   **Integration Tests:** Jest + React Testing Library + `MSW`. Test the interaction between multiple components or components interacting with a mocked API layer.
+*   **End-to-End Tests:** Playwright/Cypress. Cover the most critical user journeys, running against a deployed environment (staging/production).
+*   **Mocking Strategy:**
+    *   **Unit Testing Components:** Use `jest.mock` for specific modules (e.g., context providers, react-router hooks) if necessary. Focus on testing component behavior in isolation.
+    *   **Integration Testing Components/Features:** Use `MSW` (Mock Service Worker) to intercept and mock network requests made by the components. This allows simulating various API responses (success, error, loading) without running a real backend.
+*   **Test Data Management:** Use simple JSON mock data for API responses. For larger sets, use factories (e.g., `faker.js`) to generate realistic data.
+
+**Monitoring & Logging:**
+*   Client-side error tracking (e.g., Sentry, Bugsnag) for JavaScript errors.
+*   Performance monitoring (e.g., Lighthouse scores, Web Vitals).
+*   Analytics for user behavior (e.g., Google Analytics, Mixpanel).
+
+**Dependencies:**
+*   `react`, `react-dom`, `next`
+*   `typescript`
+*   `tailwindcss`, `daisyui`
+*   `axios` or `swr`/`react-query`
+*   `jest`, `@testing-library/react`, `@testing-library/jest-dom`, `msw`
+*   `playwright`/`cypress`
+
+**Potential Risks & Mitigations:**
+*   **Risk:** Slow page load times. **Mitigation:** Implement SSR/SSG, image optimization, code splitting, CDN.
+*   **Risk:** Poor user experience on mobile. **Mitigation:** Mobile-first design, thorough responsive testing.
+*   **Risk:** Complex state management leading to bugs. **Mitigation:** Use simpler state management libraries, keep component state localized, use custom hooks for shared logic.
+
+## 4. Infrastructure and Deployment
+
+**Cloud Provider:** AWS
+
+**CI/CD Pipeline (GitHub Actions):**
+1.  **Code Commit/Push:** Trigger on pushes to `main` or pull request merges.
+2.  **Linting & Static Analysis:** ESLint, Prettier for code quality.
+3.  **Unit & Integration Tests:** Run tests for affected services.
+4.  **Docker Image Build:** Build Docker images for each microservice (Backend, AI).
+5.  **Image Push:** Push Docker images to AWS ECR (Elastic Container Registry).
+6.  **Infrastructure Provisioning (IaC):** Terraform/AWS CloudFormation for managing AWS resources.
+7.  **Service Deployment:** Deploy/Update services on AWS ECS/EKS.
+8.  **Frontend Deployment:** Deploy frontend to AWS Amplify or S3 + CloudFront.
+9.  **E2E Tests:** Run E2E tests against the deployed staging environment.
+10. **Notifications:** Slack/email notifications on build status.
+
+**Deployment Strategy:**
+*   **Environments:** `development`, `staging`, `production`.
+*   **Staging:** Deploy every successful merge to `main` to a staging environment for testing and UAT.
+*   **Production:** Manual approval for deployment from `staging` to `production`.
+*   **Blue/Green or Canary Deployments:** For critical services in production to minimize downtime and risk.
+
+**Key AWS Services:**
+*   **Compute:** AWS ECS (Elastic Container Service) with Fargate (serverless containers) or AWS EKS (Elastic Kubernetes Service) for more control. Fargate preferred initially for simplicity.
+*   **Database:** AWS RDS (PostgreSQL), AWS DocumentDB (MongoDB compatible), AWS ElastiCache (Redis).
+*   **Search:** AWS OpenSearch Service.
+*   **Storage:** AWS S3 (object storage for media, static assets).
+*   **Networking:** AWS VPC, Load Balancers (ALB), Route 53 (DNS).
+*   **Messaging:** AWS SQS/SNS or self-managed Kafka/RabbitMQ on EC2/ECS.
+*   **Security:** AWS IAM, AWS WAF, AWS Secrets Manager.
+*   **Monitoring:** AWS CloudWatch, AWS X-Ray.
+*   **AI/ML:** Potentially AWS SageMaker for advanced ML Ops.
+
+## 5. Testing and Quality Assurance
+
+**Overall Testing Strategy:**
+*   **Testability-First Design:** Emphasize clean architecture, dependency injection, and separation of concerns to make components easily testable in isolation.
+*   **Test Pyramid:** Prioritize unit tests, followed by integration tests, and then a small number of end-to-end tests.
+*   **Automated Testing:** All tests will be automated and integrated into the CI/CD pipeline.
+*   **Continuous Testing:** Tests run frequently during development and on every code change.
+
+**10.1 Testing Hierarchy (Implement in this order):**
+
+1.  **Unit Tests - Simple Cases First**
+    *   **Focus:** Individual functions, methods, pure components (frontend), and business logic.
+    *   **Characteristics:** Fast, isolated, test internal logic.
+    *   **Mocking:** Use real objects instead of mocks when possible. Only mock immediate external dependencies (e.g., database repository, HTTP calls) at the boundary of the unit being tested. Simple stubs are preferred over complex mocks.
+    *   **Example (Backend):** Test a service method that performs a calculation. Mock its dependent repository method to return predictable data.
+    *   **Example (Frontend):** Test a React component's rendering based on props, or a custom hook's logic.
+
+2.  **Integration Tests - Minimal Setup**
+    *   **Focus:** Interactions between components, services, and external systems.
+    *   **Characteristics:** Test actual integration points, slightly slower than unit tests.
+    *   **Mocking:** Prefer real implementations over complex mocks. Use embedded databases (e.g., SQLite for Node.js TypeORM tests), in-memory caches, or test containers (Docker Compose with services like PostgreSQL, MongoDB, Elasticsearch) for actual database/external service interactions. Mock true external third-party APIs (e.g., Payment Gateway, Travel Provider APIs) using HTTP mocking libraries (e.g., `nock`, `MSW`).
+    *   **Example (Backend):** Test an API endpoint that involves database queries and calls to another internal service. Spin up a test database container, mock the external service call.
+    *   **Example (Frontend):** Test a form submission that triggers an API call, using `MSW` to mock the API response.
+
+3.  **End-to-End Tests - Critical Paths Only**
+    *   **Focus:** Entire user journeys through the deployed system.
+    *   **Characteristics:** Slowest, most brittle, but provide highest confidence in system functionality.
+    *   **Mocking:** Minimal mocking, primarily for very complex or unavailable external systems (e.g., specific edge cases from a rare payment provider response). Ideally, run against a staging environment with as many real services as possible. Use test accounts and test data.
+    *   **Example:** User registration -> login -> search for experience -> book -> view booking history.
+
+**10.2 Mocking Strategy - SIMPLIFIED APPROACH**
+
+*   **Prefer Dependency Injection:** Design classes to accept their dependencies (e.g., `UserService` constructor takes `UserRepository`). This makes it easy to inject mock/stub/fake implementations in tests.
+*   **Use Simple Stubs/Fakes:** For internal dependencies, prefer creating simple stub classes or fake in-memory implementations instead of complex mocking frameworks if possible.
+    *   *Example:* For `UserRepository`, create a simple object `InMemoryUserRepository` with `save` and `findOne` methods that operate on an array.
+*   **Mock at System Boundaries:** Only use dedicated mocking libraries (e.g., `nock` for Node.js HTTP, `MSW` for browser HTTP) when interacting with:
+    *   External third-party APIs (Stripe, Amadeus, Google OAuth).
+    *   Databases (at the repository level for unit tests only; use real test DBs for integration tests).
+    *   Message Brokers (for unit tests of publishing logic; for integration tests, verify message sent to a local test broker).
+    *   File Storage (S3, etc.).
+*   **Avoid Mocking Internal Components:** Do not mock one service when testing another if they are part of the same integration test scope. Instead, allow them to communicate. If a service is too complex to include, consider it an external dependency for that test's scope.
+
+**10.3 Testing Tools & Frameworks:**
+
+*   **Backend (Node.js/NestJS):**
+    *   **Unit/Integration:** `Jest` (test runner, assertion library, mocking). `Supertest` (for HTTP API testing). `TypeORM`'s built-in testing utilities for database connection setup with SQLite or Testcontainers.
+    *   **Common Test Patterns:**
+        *   **Service Unit Test:** `describe('UserService', () => { let service: UserService; let repository: Mocked<Repository<User>>; beforeEach(() => { repository = { findOne: jest.fn(), save: jest.fn() } as any; service = new UserService(repository); }); it('should create a user', async () => { repository.save.mockResolvedValueOnce({ id: 1, email: 'test@example.com' }); const user = await service.createUser('test@example.com', 'password'); expect(user.email).toBe('test@example.com'); expect(repository.save).toHaveBeenCalledTimes(1); }); });`
+        *   **Controller Integration Test:** `describe('AuthController (e2e)', () => { let app: INestApplication; beforeEach(async () => { const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AuthModule], }).compile(); app = moduleFixture.createNestApplication(); await app.init(); }); it('/auth/login (POST)', () => { return request(app.getHttpServer()).post('/auth/login').send({ email: 'test@example.com', password: 'password' }).expect(200).expect(({ body }) => { expect(body.access_token).toBeDefined(); }); }); });` (For this, `AuthModule` would be configured to use a test database).
+    *   **Mock Library Recommendations:** `Jest`'s built-in mocking (`jest.fn()`, `jest.mock()`). `nock` for HTTP outgoing calls. `Testcontainers` for spinning up real database instances for integration tests.
+
+*   **AI/ML (Python/FastAPI):**
+    *   **Unit/Integration:** `Pytest` (test runner), `unittest.mock` (for mocking), `httpx` (async HTTP client for integration tests).
+    *   **Common Test Patterns:**
+        *   **Function Unit Test:** `def test_get_similar_items(): assert get_similar_items(item_id, data) == expected_items`
+        *   **FastAPI Integration Test:** `from fastapi.testclient import TestClient client = TestClient(app) def test_recommendations(): response = client.get("/recommendations/123") assert response.status_code == 200 assert "recommendations" in response.json()`
+    *   **Mock Library Recommendations:** `unittest.mock.patch`, `MagicMock`. For HTTP, consider `responses` library.
+
+*   **Frontend (React/Next.js):**
+    *   **Unit/Integration:** `Jest` (test runner), `@testing-library/react` (for component testing), `@testing-library/jest-dom` (custom matchers).
+    *   **E2E:** `Playwright` or `Cypress`.
+    *   **Common Test Patterns:**
+        *   **Component Unit Test:** `test('renders button with correct text', () => { render(<Button text="Click Me" />); expect(screen.getByText(/click me/i)).toBeInTheDocument(); });`
+        *   **Feature Integration Test (with MSW):** `test('successful login displays dashboard', async () => { server.use(rest.post('/api/login', (req, res, ctx) => res(ctx.json({ token: 'fake-token' })))); render(<LoginForm />); userEvent.type(screen.getByLabelText(/email/i), 'test@example.com'); userEvent.click(screen.getByRole('button', { name: /login/i })); await waitFor(() => expect(screen.getByText(/welcome to dashboard/i)).toBeInTheDocument()); });`
+    *   **Mock Library Recommendations:** `@testing-library/react` for simulating user interactions. `MSW` (Mock Service Worker) for API mocking.
+
+**10.4 Test Data Management:**
+*   **Unit Tests:** Use inline, hardcoded small data sets.
+*   **Integration Tests:**
+    *   For databases: Utilize frameworks like TypeORM's `synchronize: true` and `dropSchema: true` with a test database (e.g., `sqlite` or a `Testcontainers` based Docker instance for PostgreSQL/MongoDB). Seed the database with a minimal, representative set of data using factories (e.g., `Faker.js`).
+    *   For message queues: Use in-memory queues or lightweight test containers, verifying messages are sent/received.
+    *   For external API mocks: Pre-define expected request/response pairs.
+*   **End-to-End Tests:**
+    *   Set up a dedicated testing environment (staging) that can be easily reset or populated with test data before each test run.
+    *   Use a consistent set of test user accounts and test experiences.
+    *   Automate data cleanup or restoration to a known state after test runs.
+
+## 6. Security Considerations
+
+*   **Authentication & Authorization:** JWTs for API authentication, OAuth for social logins, role-based access control (RBAC).
+*   **Data Encryption:**
+    *   **At Rest:** Database encryption (AWS RDS/DocumentDB encryption).
+    *   **In Transit:** Enforce HTTPS/SSL/TLS for all communication (frontend-backend, inter-service).
+*   **Input Validation & Sanitization:** Strict validation on all user inputs to prevent injection attacks (SQL, NoSQL, XSS, Command Injection). Sanitize all content rendered in the UI.
+*   **Secret Management:** Use AWS Secrets Manager for API keys, database credentials, and other sensitive configurations.
+*   **Vulnerability Scanning:** Regularly use SAST (Static Application Security Testing) and DAST (Dynamic Application Security Testing) tools.
+*   **Rate Limiting:** Protect against brute-force attacks and API abuse.
+*   **OWASP Top 10:** Adhere to OWASP Top 10 guidelines (e.g., Broken Access Control, Security Misconfiguration).
+*   **Security Headers:** Implement appropriate HTTP security headers (CSP, HSTS, X-Content-Type-Options).
+*   **Dependency Management:** Regularly scan and update third-party libraries for known vulnerabilities (e.g., `npm audit`, `pip-audit`).
+*   **Least Privilege:** Grant services and users only the minimum necessary permissions.
+
+## 7. Performance & Scalability
+
+*   **Microservices:** Enables independent scaling of services based on demand.
+*   **Load Balancing:** AWS Application Load Balancers (ALB) distribute traffic across service instances.
+*   **Caching:** Redis for frequently accessed data (e.g., user profiles, popular experiences, recommendations, search results).
+*   **Database Optimization:** Proper indexing, query optimization, connection pooling. Read replicas for read-heavy workloads.
+*   **Asynchronous Processing:** Message queues (Kafka/RabbitMQ) for background tasks (email sending, analytics logging, provider notifications).
+*   **CDN:** AWS CloudFront for serving static frontend assets and media files.
+*   **Concurrency:** Non-blocking I/O in Node.js, async/await for I/O bound operations.
+*   **Monitoring:** Continuous monitoring of service metrics (latency, throughput, error rates, resource utilization) to identify bottlenecks.
+*   **Auto-scaling:** Configure auto-scaling groups for ECS services based on CPU/memory utilization or request queue length.
+
+## 8. Monitoring & Logging
+
+*   **Centralized Logging:** Aggregate logs from all services into a centralized system (e.g., AWS CloudWatch Logs, ELK Stack, Splunk).
+    *   **Backend:** Winston (Node.js) or Python `logging` module.
+    *   **Frontend:** Browser console logs, client-side error tracking (Sentry).
+*   **Structured Logging:** Log in JSON format for easy parsing and querying.
+*   **Tracing:** AWS X-Ray or OpenTelemetry for distributed tracing across microservices to understand request flows and identify latency.
+*   **Metrics & Dashboards:**
+    *   **Tools:** Prometheus + Grafana or AWS CloudWatch Dashboards.
+    *   **Key Metrics:** CPU/Memory utilization, network I/O, request latency, error rates (5xx, 4xx), successful requests, database query times, cache hit rates, queue depths.
+*   **Alerting:** Set up alerts for critical thresholds (e.g., high error rates, low disk space, long response times) via PagerDuty, Slack, or email.
+*   **Health Checks:** Implement health check endpoints (`/health`, `/ready`, `/live`) for load balancers and container orchestrators.
+*   **Business Metrics:** Track key performance indicators (KPIs) like new user registrations, bookings per day, average booking value, conversion rates.
+
+## 9. Dependencies
+
+**Internal Dependencies:**
+*   All microservices will depend on the API Gateway for external access.
+*   Discovery Service depends on Content Management Service (for data) and potentially AI Recommendation Service.
+*   Booking Service depends on Provider Integration Service (for availability and booking), User Service (for user data), and potentially Discovery Service (for experience details).
+*   AI Recommendation Service depends on user interaction data from various services.
+
+**External Libraries/Frameworks:** (Already mentioned in sections above, e.g., React, Next.js, NestJS, PostgreSQL, MongoDB, Elasticsearch, Stripe, Amadeus, etc.)
+
+**Managed Cloud Services:**
+*   AWS RDS, DocumentDB, ElastiCache, OpenSearch, S3, ECS/EKS, Lambda, SQS/SNS, CloudFront, Secrets Manager, IAM, VPC, ALB, Route 53, CloudWatch, X-Ray.
+
+## 10. Potential Risks & Mitigations
+
+*   **Risk:** **AI model accuracy and relevance.**
+    *   **Mitigation:** Implement A/B testing for recommendation algorithms, continuous monitoring of user engagement metrics (click-through rates, conversions), regular model retraining, and mechanisms for user feedback to improve relevance. Start with simpler models and iterate.
+*   **Risk:** **Integration complexity with multiple external travel providers.**
+    *   **Mitigation:** Design a highly modular Provider Integration Service with clear adapters for each provider. Implement robust error handling, retry mechanisms, and circuit breakers. Prioritize integration with a few key providers first, then expand. Use mock servers for thorough testing of integrations.
+*   **Risk:** **Scalability bottlenecks under high user load.**
+    *   **Mitigation:** Microservices architecture allows independent scaling. Implement aggressive caching, optimize database queries, use serverless compute (Fargate, Lambda) where applicable, and utilize auto-scaling. Conduct load testing regularly.
+*   **Risk:** **Data consistency issues in distributed system.**
+    *   **Mitigation:** Employ idempotent operations, event-driven architecture, and implement saga patterns for complex distributed transactions (e.g., booking flow). Strong monitoring for consistency checks.
+*   **Risk:** **Security vulnerabilities leading to data breaches or service compromise.**
+    *   **Mitigation:** Adhere to security best practices (OWASP Top 10), conduct regular security audits, static/dynamic analysis, enforce strict access controls, encrypt data at rest and in transit, manage secrets securely.
+*   **Risk:** **High operational costs for cloud infrastructure.**
+    *   **Mitigation:** Optimize resource utilization (e.g., right-sizing instances, serverless for intermittent workloads), implement cost monitoring and alerts, leverage reserved instances or savings plans for predictable workloads, optimize data transfer costs (CDN).
+*   **Risk:** **Complex deployment and CI/CD pipeline.**
+    *   **Mitigation:** Start with a simpler CI/CD setup (e.g., GitHub Actions for monorepo). Automate infrastructure provisioning with IaC (Terraform/CloudFormation). Break down deployments into smaller, manageable steps.
+*   **Risk:** **User adoption due to competitive market.**
+    *   **Mitigation:** Focus heavily on unique selling propositions (AI recommendations, stunning UX), gather user feedback early, iterate quickly on features, strong marketing and SEO strategy.
+
+## 11. Implementation Timeline (High-Level Phased Approach)
+
+**Phase 1: Minimum Viable Product (MVP) - (Approx. 3-4 months)**
+*   **Core Focus:** Basic User Management, Discovery (search/view experiences), and AI Recommendations (simpler model).
+*   **Components:**
+    *   Frontend (Basic UI, Search, Experience Detail Pages, User Auth UI).
+    *   User Service (Registration, Login, Profile).
+    *   Discovery Service (Search, Filter, View Experience).
+    *   Content Management Service (Manual content entry by admin for initial experiences).
+    *   AI Recommendation Service (Rule-based or simple collaborative filtering).
+    *   Basic Infrastructure Setup (ECS, RDS, S3).
+    *   CI/CD for User and Discovery Services.
+*   **Goal:** Allow users to browse and discover experiences with personalized (even if basic) recommendations.
+
+**Phase 2: Core Booking & Integrations - (Approx. 3-4 months)**
+*   **Core Focus:** Enable booking functionality and integrate with at least one primary travel provider.
+*   **Components:**
+    *   Booking Service (Reservation, Payment Integration).
+    *   Provider Integration Service (Connect to 1-2 key providers for availability/booking).
+    *   Enhance Frontend (Booking forms, User booking history).
+    *   Enhance AI Recommendation Service (More data sources, basic model improvements).
+    *   Refine CI/CD and expand test coverage.
+*   **Goal:** Users can find, get recommendations, and book experiences through the platform.
+
+**Phase 3: Enhancements & Scalability - (Approx. 4-6 months)**
+*   **Core Focus:** Advanced features, performance tuning, and scaling for growth.
+*   **Components:**
+    *   Advanced Search & Filtering.
+    *   User Reviews & Ratings System.
+    *   Notifications (Email, In-App).
+    *   Integration with additional travel providers.
+    *   Advanced AI models (e.g., hybrid filtering, real-time inference).
+    *   Monitoring & Alerting refinement.
+    *   Performance optimizations (caching, database scaling).
+    *   Admin Dashboard for providers.
+*   **Goal:** Feature-rich, highly performant, and scalable platform.
+
+**Ongoing:**
+*   Feature iterations based on user feedback and analytics.
+*   Security audits and updates.
+*   Performance optimization and infrastructure cost management.
+*   Model retraining and A/B testing for AI recommendations.
+
+This plan provides a comprehensive roadmap for building Voyager, emphasizing clear architectural decisions, robust testing, and a phased implementation approach.
+All components, features, and processes are defined, ensuring no ambiguity and a clear path forward for development.
+Each component has a clear, simple testing approach defined to ensure high quality and maintainability.
+Complex mocking scenarios are minimized through good design principles, focusing on real dependencies where practical and mocking at system boundaries when necessary.
+The development path is incremental and verifiable at each step, promoting efficient and confident progress.
