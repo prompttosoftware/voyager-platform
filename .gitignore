@@ -1,0 +1,53 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+.DS_Store
+
+# Compiled output
+dist/
+out/
+build/
+coverage/
+
+# Logs
+*.log
+*.log.*
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# System files
+.env
+.env.*
+*.tmp
+
+# Terraform
+.terraform
+terraform.tfstate
+terraform.tfstate.backup
+
+# AWS related
+aws.config
+aws.credentials
+
+# Test artifacts
+*.test.ts
+*.spec.ts
+*.e2e-spec.ts
+.nyc_output/
+tsconfig.tsbuildinfo
+
+# Next.js
+.next/
+out/
+
+# Database
+*.sqlite3
+
+# Docker
+Dockerfile*
+docker-compose.yml
